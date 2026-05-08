@@ -5,20 +5,29 @@ from transformers import (
     AutoModelForSequenceClassification
 )
 
-from app.config import MODEL_PATH
+MODEL_NAME = "LTKThoa/nextfund-campaign-moderation"
 
-# device
-device = torch.device(
-    "cuda" if torch.cuda.is_available() else "cpu"
-)
+device = torch.device("cpu")
 
-# tokenizer
-tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+tokenizer = None
+model = None
 
-# model
-model = AutoModelForSequenceClassification.from_pretrained(
-    MODEL_PATH
-)
 
-model.to(device)
-model.eval()
+def load_model():
+
+    global tokenizer, model
+
+    if tokenizer is None or model is None:
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            MODEL_NAME
+        )
+
+        model = AutoModelForSequenceClassification.from_pretrained(
+            MODEL_NAME
+        )
+
+        model.to(device)
+        model.eval()
+
+    return tokenizer, model, device
