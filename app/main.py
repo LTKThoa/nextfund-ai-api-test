@@ -17,7 +17,8 @@ def moderate(data: CampaignRequest):
 
     result = moderate_campaign(
         data.title,
-        data.description
+        data.description,
+        data.goalAmount
     )
 
     return result

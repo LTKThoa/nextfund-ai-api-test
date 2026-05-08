@@ -10,61 +10,38 @@ from app.config import (
 
 from app.model_loader import load_model
 
-# ==========================================
+# ================================
 # CLEAN TEXT
-# ==========================================
-def clean_text(text: str):
-
+# ================================
+def clean_text(text):
     text = text.lower()
-
-    # remove links
     text = re.sub(r"http\S+", "", text)
-
-    # remove special chars
-    text = re.sub(r"[^a-z0-9 ]", " ", text)
-
-    # remove extra spaces
-    text = re.sub(r"\s+", " ", text).strip()
-
+    text = re.sub(r"[^a-z0-9 ]", "", text)
     return text
 
-
-# ==========================================
-# RULE-BASED FILTER
-# ==========================================
-def rule_based_check(text: str):
-
+# ================================
+# RULE CHECK
+# ================================
+def rule_based_check(text):
     text = text.lower()
 
-    # spam keywords
     for keyword in SPAM_KEYWORDS:
-
         if keyword in text:
+            return False, f"Spam keyword: {keyword}"
 
-            return False, f"Spam keyword detected: {keyword}"
-
-    # external links
     if "http://" in text or "https://" in text:
-
         return False, "External links detected"
-
-    # too short
-    if len(text.split()) < 3:
-
-        return False, "Content too short"
 
     return True, None
 
+# ================================
+# PREDICT
+# ================================
 
-# ==========================================
-# AI PREDICTION
-# ==========================================
-def predict_score(text: str):
+def predict_score(text):
 
-    # lazy load model
     tokenizer, model, device = load_model()
 
-    # tokenize
     inputs = tokenizer(
         text,
         return_tensors="pt",
@@ -73,37 +50,34 @@ def predict_score(text: str):
         max_length=MAX_LENGTH
     ).to(device)
 
-    # inference
     with torch.no_grad():
-
         outputs = model(**inputs)
 
-    # softmax probability
     probs = torch.softmax(outputs.logits, dim=1)
 
-    # positive class score
-    score = probs[0][1].item()
-
-    return score
-
-
-# ==========================================
-# MAIN MODERATION FUNCTION
-# ==========================================
+    return probs[0][1].item()
+# ================================
+# MODERATION LOGIC
+# ================================
 def moderate_campaign(
-    title: str,
-    description: str
+    title,
+    description,
+    goal_amount
 ):
 
-    # combine text
-    full_text = f"{title} {description}"
+    import math
 
-    # clean text
+    goal_log = math.log1p(goal_amount)
+
+    full_text = (
+        f"{title} "
+        f"{description} "
+        f"goal {goal_log}"
+    )
+
     text = clean_text(full_text)
 
-    # ======================================
-    # RULE-BASED CHECK
-    # ======================================
+    # rule-based
     passed, reason = rule_based_check(text)
 
     if not passed:
@@ -114,24 +88,10 @@ def moderate_campaign(
             "trust_score": 0
         }
 
-    # ======================================
-    # AI SCORE
-    # ======================================
-    try:
+    # AI score
+    score = predict_score(text)
 
-        score = predict_score(text)
-
-    except Exception as e:
-
-        return {
-            "status": "pending",
-            "reason": f"Model inference error: {str(e)}",
-            "trust_score": 0
-        }
-
-    # ======================================
-    # DECISION LOGIC
-    # ======================================
+    # decision
     if score >= APPROVE_THRESHOLD:
 
         status = "approved"
@@ -144,9 +104,6 @@ def moderate_campaign(
 
         status = "rejected"
 
-    # ======================================
-    # RESPONSE
-    # ======================================
     return {
         "status": status,
         "trust_score": round(score, 4)
